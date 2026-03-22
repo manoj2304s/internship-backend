@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
 import User from "../models/user.model";
@@ -10,6 +11,7 @@ const REFRESH_TOKEN_SECRET =
 const ACCESS_TOKEN_EXPIRES_IN = "15m";
 const REFRESH_TOKEN_EXPIRES_IN = "7d";
 const OTP_EXPIRES_IN_MS = 10 * 60 * 1000;
+const PASSWORD_RESET_EXPIRES_IN_MS = 15 * 60 * 1000;
 
 const registerSchema = z.object({
   name: z.string().trim().min(2),
@@ -46,6 +48,15 @@ const verifyPhoneOtpLoginSchema = z.object({
 
 const refreshTokenSchema = z.object({
   refreshToken: z.string().min(1),
+});
+
+const passwordResetRequestSchema = z.object({
+  email: z.email().transform((value) => value.toLowerCase().trim()),
+});
+
+const passwordResetSchema = z.object({
+  token: z.string().trim().min(1),
+  newPassword: z.string().min(6),
 });
 
 const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
@@ -98,6 +109,11 @@ const clearOtpState = {
   otpPurpose: null,
   otpChannel: null,
   otpExpiresAt: null,
+};
+
+const clearPasswordResetState = {
+  passwordResetToken: null,
+  passwordResetExpiresAt: null,
 };
 
 export const register = async (req: Request, res: Response) => {
@@ -414,6 +430,102 @@ export const refreshAccessToken = async (req: Request, res: Response) => {
     console.error(error);
     return res.status(401).json({
       message: "Refresh token expired or invalid",
+    });
+  }
+};
+
+export const requestPasswordReset = async (req: Request, res: Response) => {
+  try {
+    const payload = passwordResetRequestSchema.parse(req.body);
+    const user = await User.findOne({ email: payload.email });
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    const passwordResetExpiresAt = new Date(
+      Date.now() + PASSWORD_RESET_EXPIRES_IN_MS,
+    );
+
+    await User.updateOne(
+      { _id: user._id },
+      {
+        passwordResetToken: resetToken,
+        passwordResetExpiresAt,
+      },
+    );
+
+    return res.status(200).json({
+      message: "Password reset token generated successfully",
+      reset: {
+        email: user.email,
+        token: resetToken,
+        expiresAt: passwordResetExpiresAt,
+      },
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        message: "Invalid password reset request payload",
+        errors: error.flatten(),
+      });
+    }
+
+    console.error(error);
+    return res.status(500).json({
+      message: "Something went wrong",
+    });
+  }
+};
+
+export const resetPassword = async (req: Request, res: Response) => {
+  try {
+    const payload = passwordResetSchema.parse(req.body);
+
+    const user = await User.findOne({ passwordResetToken: payload.token });
+    if (!user) {
+      return res.status(400).json({
+        message: "Invalid reset token",
+      });
+    }
+
+    if (
+      !user.passwordResetExpiresAt ||
+      user.passwordResetExpiresAt.getTime() < Date.now()
+    ) {
+      return res.status(400).json({
+        message: "Reset token has expired",
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(payload.newPassword, 10);
+
+    await User.updateOne(
+      { _id: user._id },
+      {
+        password: hashedPassword,
+        refreshToken: null,
+        ...clearPasswordResetState,
+      },
+    );
+
+    return res.status(200).json({
+      message: "Password reset successful",
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        message: "Invalid password reset payload",
+        errors: error.flatten(),
+      });
+    }
+
+    console.error(error);
+    return res.status(500).json({
+      message: "Something went wrong",
     });
   }
 };
