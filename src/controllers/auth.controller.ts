@@ -3,6 +3,7 @@ import bcrypt from "bcrypt";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
+import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import User from "../models/user.model";
 
 const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET ?? "access-secret-dev";
@@ -514,6 +515,38 @@ export const requestPasswordReset = async (req: Request, res: Response) => {
       });
     }
 
+    console.error(error);
+    return res.status(500).json({
+      message: "Something went wrong",
+    });
+  }
+};
+
+export const getCurrentUser = async (
+  req: AuthenticatedRequest,
+  res: Response,
+) => {
+  try {
+    const userId = req.user?.userId;
+
+    if (!userId) {
+      return res.status(401).json({
+        message: "Unauthorized",
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    return res.status(200).json({
+      message: "Authenticated user fetched successfully",
+      user: buildUserResponse(user),
+    });
+  } catch (error) {
     console.error(error);
     return res.status(500).json({
       message: "Something went wrong",
