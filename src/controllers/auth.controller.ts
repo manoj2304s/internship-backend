@@ -434,6 +434,46 @@ export const refreshAccessToken = async (req: Request, res: Response) => {
   }
 };
 
+export const logout = async (req: Request, res: Response) => {
+  try {
+    const payload = refreshTokenSchema.parse(req.body);
+
+    const decoded = jwt.verify(payload.refreshToken, REFRESH_TOKEN_SECRET) as {
+      userId: string;
+    };
+
+    const user = await User.findById(decoded.userId);
+    if (!user || user.refreshToken !== payload.refreshToken) {
+      return res.status(401).json({
+        message: "Invalid refresh token",
+      });
+    }
+
+    await User.updateOne(
+      { _id: user._id },
+      {
+        refreshToken: null,
+      },
+    );
+
+    return res.status(200).json({
+      message: "Logout successful",
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        message: "Invalid logout payload",
+        errors: error.flatten(),
+      });
+    }
+
+    console.error(error);
+    return res.status(401).json({
+      message: "Refresh token expired or invalid",
+    });
+  }
+};
+
 export const requestPasswordReset = async (req: Request, res: Response) => {
   try {
     const payload = passwordResetRequestSchema.parse(req.body);
