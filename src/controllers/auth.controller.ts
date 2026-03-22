@@ -19,6 +19,7 @@ const registerSchema = z.object({
   email: z.email().transform((value) => value.toLowerCase().trim()),
   phone: z.string().trim().min(10),
   password: z.string().min(6),
+  role: z.enum(["user", "admin", "super_admin"]).optional().default("user"),
   verificationChannel: z.enum(["email", "phone"]).optional().default("email"),
 });
 
@@ -62,8 +63,11 @@ const passwordResetSchema = z.object({
 
 const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
 
-const generateTokens = (userId: string) => {
-  const accessToken = jwt.sign({ userId }, ACCESS_TOKEN_SECRET, {
+const generateTokens = (
+  userId: string,
+  role: "user" | "admin" | "super_admin",
+) => {
+  const accessToken = jwt.sign({ userId, role }, ACCESS_TOKEN_SECRET, {
     expiresIn: ACCESS_TOKEN_EXPIRES_IN,
   });
   const refreshToken = jwt.sign({ userId }, REFRESH_TOKEN_SECRET, {
@@ -78,12 +82,14 @@ const buildUserResponse = (user: {
   name: string;
   email: string;
   phone: string;
+  role: "user" | "admin" | "super_admin";
   isVerified: boolean;
 }) => ({
   id: String(user._id),
   name: user.name,
   email: user.email,
   phone: user.phone,
+  role: user.role,
   isVerified: user.isVerified,
 });
 
@@ -141,6 +147,7 @@ export const register = async (req: Request, res: Response) => {
       email: payload.email,
       phone: payload.phone,
       password: hashedPassword,
+      role: payload.role,
     });
 
     const { otpCode, otpExpiresAt } = await issueOtp(
@@ -159,6 +166,7 @@ export const register = async (req: Request, res: Response) => {
           name: user.name,
           email: user.email,
           phone: user.phone,
+          role: user.role,
           isVerified: false,
         },
       ),
@@ -230,6 +238,7 @@ export const verifyRegistrationOtp = async (req: Request, res: Response) => {
         name: user.name,
         email: user.email,
         phone: user.phone,
+        role: user.role,
         isVerified: true,
       }),
     });
@@ -272,7 +281,10 @@ export const login = async (req: Request, res: Response) => {
       });
     }
 
-    const { accessToken, refreshToken } = generateTokens(String(user._id));
+    const { accessToken, refreshToken } = generateTokens(
+      String(user._id),
+      user.role,
+    );
     user.refreshToken = refreshToken;
     await user.save();
 
@@ -366,7 +378,10 @@ export const verifyPhoneLoginOtp = async (req: Request, res: Response) => {
       });
     }
 
-    const { accessToken, refreshToken } = generateTokens(String(user._id));
+    const { accessToken, refreshToken } = generateTokens(
+      String(user._id),
+      user.role,
+    );
     await User.updateOne(
       { _id: user._id },
       {
@@ -411,7 +426,10 @@ export const refreshAccessToken = async (req: Request, res: Response) => {
       });
     }
 
-    const { accessToken, refreshToken } = generateTokens(String(user._id));
+    const { accessToken, refreshToken } = generateTokens(
+      String(user._id),
+      user.role,
+    );
     user.refreshToken = refreshToken;
     await user.save();
 
@@ -552,6 +570,26 @@ export const getCurrentUser = async (
       message: "Something went wrong",
     });
   }
+};
+
+export const getAdminDashboard = async (
+  req: AuthenticatedRequest,
+  res: Response,
+) => {
+  return res.status(200).json({
+    message: "Admin access granted",
+    user: req.user,
+  });
+};
+
+export const getSuperAdminDashboard = async (
+  req: AuthenticatedRequest,
+  res: Response,
+) => {
+  return res.status(200).json({
+    message: "Super admin access granted",
+    user: req.user,
+  });
 };
 
 export const resetPassword = async (req: Request, res: Response) => {

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+  getAdminDashboard,
   getCurrentUser,
   login,
   logout,
@@ -7,11 +8,12 @@ import {
   refreshAccessToken,
   register,
   resetPassword,
+  getSuperAdminDashboard,
   requestPhoneLoginOtp,
   verifyPhoneLoginOtp,
   verifyRegistrationOtp,
 } from "../controllers/auth.controller";
-import { authenticate } from "../middleware/auth.middleware";
+import { authenticate, authorize } from "../middleware/auth.middleware";
 
 const router = Router();
 
@@ -25,5 +27,7 @@ router.post("/refresh-token", refreshAccessToken);
 router.post("/password-reset/request", requestPasswordReset);
 router.post("/password-reset/confirm", resetPassword);
 router.get("/me", authenticate, getCurrentUser);
+router.get("/admin", authenticate, authorize("admin", "super_admin"), getAdminDashboard);
+router.get("/super-admin", authenticate, authorize("super_admin"), getSuperAdminDashboard);
 
 export default router;
