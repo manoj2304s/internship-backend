@@ -1,33 +1,39 @@
 import { Router } from "express";
 import {
-  getAdminDashboard,
-  getCurrentUser,
+  adminOnly,
+  forgotPassword,
   login,
+  loginOtp,
   logout,
-  requestPasswordReset,
-  refreshAccessToken,
+  me,
+  refreshToken,
   register,
   resetPassword,
-  getSuperAdminDashboard,
-  requestPhoneLoginOtp,
-  verifyPhoneLoginOtp,
-  verifyRegistrationOtp,
+  superAdminOnly,
+  verifyOtp,
 } from "../controllers/auth.controller";
 import { authenticate, authorize } from "../middleware/auth.middleware";
+import { authRateLimiter } from "../middleware/rate-limit.middleware";
 
 const router = Router();
 
+router.use(authRateLimiter);
+
 router.post("/register", register);
-router.post("/verify-otp", verifyRegistrationOtp);
+router.post("/verify-otp", verifyOtp);
 router.post("/login", login);
-router.post("/login/otp/request", requestPhoneLoginOtp);
-router.post("/login/otp/verify", verifyPhoneLoginOtp);
+router.post("/login-otp", loginOtp);
+router.post("/refresh-token", refreshToken);
+router.post("/forgot-password", forgotPassword);
+router.post("/reset-password", resetPassword);
 router.post("/logout", logout);
-router.post("/refresh-token", refreshAccessToken);
-router.post("/password-reset/request", requestPasswordReset);
+router.get("/me", authenticate, me);
+router.get("/admin", authenticate, authorize("admin", "super_admin"), adminOnly);
+router.get("/super-admin", authenticate, authorize("super_admin"), superAdminOnly);
+
+router.post("/login/otp/request", loginOtp);
+router.post("/login/otp/verify", loginOtp);
+router.post("/password-reset/request", forgotPassword);
 router.post("/password-reset/confirm", resetPassword);
-router.get("/me", authenticate, getCurrentUser);
-router.get("/admin", authenticate, authorize("admin", "super_admin"), getAdminDashboard);
-router.get("/super-admin", authenticate, authorize("super_admin"), getSuperAdminDashboard);
 
 export default router;

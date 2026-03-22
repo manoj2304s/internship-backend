@@ -1,35 +1,35 @@
 import { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
-
-const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET ?? "access-secret-dev";
+import { env } from "../config/env";
+import AppError from "../utils/app-error";
+import { UserRole } from "../types/auth.types";
 
 type AuthenticatedRequest = Request & {
   user?: {
     userId: string;
-    role: "user" | "admin" | "super_admin";
+    role: UserRole;
   };
 };
 
 export const authenticate = (
   req: Request,
-  res: Response,
+  _res: Response,
   next: NextFunction,
 ) => {
   const authorizationHeader = req.headers.authorization;
 
   if (!authorizationHeader?.startsWith("Bearer ")) {
-    return res.status(401).json({
-      message: "Access token is required",
-    });
+    return next(new AppError("Access token is required", 401));
   }
 
   const token = authorizationHeader.slice("Bearer ".length).trim();
 
   try {
-    const decoded = jwt.verify(token, ACCESS_TOKEN_SECRET) as unknown as {
+    const decoded = jwt.verify(token, env.JWT_SECRET) as unknown as {
       userId: string;
-      role: "user" | "admin" | "super_admin";
+      role: UserRole;
     };
+
     (req as AuthenticatedRequest).user = {
       userId: decoded.userId,
       role: decoded.role,
@@ -38,33 +38,24 @@ export const authenticate = (
     return next();
   } catch (error) {
     if (error instanceof jwt.TokenExpiredError) {
-      return res.status(401).json({
-        message: "Access token has expired",
-      });
+      return next(new AppError("Access token has expired", 401));
     }
 
-    return res.status(401).json({
-      message: "Invalid access token",
-    });
+    return next(new AppError("Invalid access token", 401));
   }
 };
 
 export const authorize =
-  (...allowedRoles: Array<"user" | "admin" | "super_admin">) =>
-  (req: Request, res: Response, next: NextFunction) => {
-    const authenticatedRequest = req as AuthenticatedRequest;
-    const userRole = authenticatedRequest.user?.role;
+  (...allowedRoles: UserRole[]) =>
+  (req: Request, _res: Response, next: NextFunction) => {
+    const currentRole = (req as AuthenticatedRequest).user?.role;
 
-    if (!userRole) {
-      return res.status(401).json({
-        message: "Unauthorized",
-      });
+    if (!currentRole) {
+      return next(new AppError("Unauthorized", 401));
     }
 
-    if (!allowedRoles.includes(userRole)) {
-      return res.status(403).json({
-        message: "Forbidden: insufficient permissions",
-      });
+    if (!allowedRoles.includes(currentRole)) {
+      return next(new AppError("Forbidden: insufficient permissions", 403));
     }
 
     return next();

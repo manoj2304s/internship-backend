@@ -1,11 +1,12 @@
 import mongoose from "mongoose";
+import { env } from "./env";
 
 const connectDB = async () => {
   try {
-    await mongoose.connect("mongodb://localhost:27017/internshipBackend");
+    await mongoose.connect(env.MONGO_URI);
     console.log("DB connected");
-  } catch (err) {
-    console.log(err);
+  } catch (error) {
+    console.error("Database connection failed", error);
     process.exit(1);
   }
 };

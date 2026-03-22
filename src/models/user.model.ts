@@ -33,28 +33,6 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    otpCode: {
-      type: String,
-      default: null,
-    },
-    otpPurpose: {
-      type: String,
-      enum: ["verification", "login", null],
-      default: null,
-    },
-    otpChannel: {
-      type: String,
-      enum: ["email", "phone", null],
-      default: null,
-    },
-    otpExpiresAt: {
-      type: Date,
-      default: null,
-    },
-    refreshToken: {
-      type: String,
-      default: null,
-    },
     passwordResetToken: {
       type: String,
       default: null,
